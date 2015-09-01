@@ -54,3 +54,24 @@ def test_query(engine, date_range):
                 u'time': u'2015-06-14T00:00:00Z'},
                {u'mean': 2.5,
                 u'time': u'2015-06-16T02:00:00Z'}]
+
+
+def test_show(engine, date_range):
+    query = Query().show('databases')
+    result = list(engine.execute(query))
+    assert str(query) == 'SHOW DATABASES;'
+
+    query = Query().show('series')
+    result = list(engine.execute(query))
+    assert str(query) == 'SHOW SERIES;'
+    assert result == [[{'_key': 'deliciousness,dish=pie', 'dish': 'pie'}, {'_key': 'deliciousness,dish=pizza', 'dish': 'pizza'}]]
+
+    query = Query().show('tag', 'values').with_('dish')
+    result = list(engine.execute(query))
+    assert str(query) == 'SHOW TAG VALUES WITH KEY=dish;'
+    assert result == [[{'dish': 'pie'}, {'dish': 'pizza'}]]
+
+    query = Query().show('tag', 'keys')
+    result = list(engine.execute(query))
+    assert str(query) == 'SHOW TAG KEYS;'
+    assert result == [[{'tagKey': 'dish'}]]

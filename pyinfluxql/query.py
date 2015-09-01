@@ -26,13 +26,17 @@ class Query(object):
     }
     _numeric_types = (int, float)
     _order_identifiers = {'asc', 'desc'}
+    _show_expressions = {'DATABASES', 'SERIES', 'MEASUREMENTS', 'TAG'}
+    _show_tag_expressions = {'KEYS', 'VALUES'}
 
     def __init__(self, *expressions):
         self._select_expressions = list(expressions)
         self._measurement = None
         self._is_delete = False
+        self._is_show = False
         self._limit = None
         self._where = {}
+        self._with = None
         self._start_time = None
         self._end_time = None
         self._group_by_fill = False
@@ -66,9 +70,38 @@ class Query(object):
             self._format_select_expression(s) for s in select_expressions
         ])
 
+    def _format_show_expressions(self, show_expressions):
+        return " ".join([
+            e.upper() for e in show_expressions
+        ])
+
     def _format_select(self):
         return "SELECT %s" % self._format_select_expressions(
             *self._select_expressions)
+
+    def _format_show(self):
+        return "SHOW %s" % (
+            self._format_show_expressions(self._select_expressions))
+
+    def _validate_show_expressions(self, expressions):
+        if len(expressions) > 2:
+            raise TypeError("Show only takes 2 expressions")
+        elif not all(isinstance(e, six.string_types) for e in expressions):
+            raise TypeError("Show takes a string")
+        elif expressions[0].upper() not in self._show_expressions:
+            raise TypeError("Show expression must be in %s" % self._show_expressions)
+        elif expressions[0].upper() == 'TAG':
+            if len(expressions) < 2:
+                raise TypeError("SHOW TAG must have a specifier")
+            if expressions[1].upper() not in self._show_tag_expressions:
+                raise TypeError(
+                    "SHOW TAG must have a specifier in %s" % self._show_tag_expressions)
+
+    def show(self, *show_expressions):
+        self._validate_show_expressions(show_expressions)
+        self._select_expressions = show_expressions
+        self._is_show = True
+        return self
 
     def _format_measurement(self, measurement):
         enquote = (
@@ -79,6 +112,8 @@ class Query(object):
         return measurement
 
     def _format_from(self):
+        if not self._measurement:
+            return ''
         clause = "FROM %s" % self._format_measurement(self._measurement)
         return clause
 
@@ -99,6 +134,25 @@ class Query(object):
         return '%s %s %s' % ('.'.join(identifiers),
                              self.binary_op[comparator],
                              self._format_value(value))
+
+    def _validate_with(self, show_clause):
+        clause = show_clause.upper()
+        if clause == 'VALUES' and not self._with:
+            raise TypeError("SHOW VALUES needs a with clause")
+        elif clause != 'VALUES' and self._with:
+            raise TypeError("WITH only works with SHOW VALUES")
+
+    def _format_with(self):
+        if not self._is_show or len(self._select_expressions) < 2:
+            return ''
+        self._validate_with(self._select_expressions[1])
+        return 'WITH KEY=%s' % self._with if self._with else ''
+
+    def with_(self, key=None):
+        if not self._is_show:
+            raise TypeError("Only SHOW statements can have with clauses")
+        self._with = key
+        return self
 
     def _format_where(self):
         if not self._where:
@@ -169,13 +223,16 @@ class Query(object):
         return self._format_query(query)
 
     def _format_select_query(self):
-        query = "%s %s %s %s %s %s %s" % (self._format_select(),
-                                          self._format_from(),
-                                          self._format_where(),
-                                          self._format_group_by(),
-                                          self._format_limit(),
-                                          self._format_into(),
-                                          self._format_order())
+        query = "%s %s %s %s %s %s %s %s" % (
+            self._format_select() if not self._is_show
+            else self._format_show(),
+            self._format_from(),
+            self._format_with(),
+            self._format_where(),
+            self._format_group_by(),
+            self._format_limit(),
+            self._format_into(),
+            self._format_order())
         return self._format_query(query)
 
     def _format(self):

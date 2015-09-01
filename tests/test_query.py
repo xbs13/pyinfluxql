@@ -466,6 +466,55 @@ def test_format_delete_query():
 
 
 @pytest.mark.unit
+def test_show_query():
+    q = Query().show('measurements')
+    assert str(q) == 'SHOW MEASUREMENTS;'
+    assert q._is_show
+
+    with pytest.raises(TypeError):
+        Query().show('aosidnf')
+
+    q = Query().show('measurements').from_('pants')
+    assert str(q) == 'SHOW MEASUREMENTS FROM pants;'
+    assert q._is_show
+
+
+@pytest.mark.unit
+def test_show_tag_query():
+    q = Query().show('tag', 'keys')
+    assert str(q) == 'SHOW TAG KEYS;'
+    assert q._is_show
+
+    with pytest.raises(TypeError):
+        Query().show('tag')
+
+    with pytest.raises(TypeError):
+        Query().show('tag', 'asda')
+
+
+@pytest.mark.unit
+def test_show_with_query():
+    q = Query().show('tag', 'values').with_('host')
+    assert str(q) == 'SHOW TAG VALUES WITH KEY=host;'
+    assert q._with == 'host'
+    assert q._is_show
+
+    with pytest.raises(TypeError):
+        query = Query().show('tag', 'keys').with_('host')
+        str(query)
+
+    with pytest.raises(TypeError):
+        query = Query().show('tag', 'values')
+        str(query)
+
+
+@pytest.mark.unit
+def test_format_show_query():
+    q = Query().show('measurements')
+    assert q._format_show() == 'SHOW MEASUREMENTS'
+
+
+@pytest.mark.unit
 def test_format():
     q = Query('blah').from_('series')
     q._is_delete = True
